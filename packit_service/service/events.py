@@ -31,6 +31,7 @@ from typing import Optional, List, Union
 
 from ogr.abstract import GitProject
 from packit.config import JobTriggerType, get_package_config_from_repo, PackageConfig
+from packit.exceptions import PackitConfigException
 from packit_service.config import service_config
 from packit_service.worker.copr_db import CoprBuildDB
 
@@ -195,13 +196,19 @@ class PullRequestEvent(AbstractGithubEvent):
         return result
 
     def get_package_config(self) -> Optional[PackageConfig]:
-        package_config: PackageConfig = get_package_config_from_repo(
-            self.get_project(), self.base_ref
-        )
-        if not package_config:
-            return None
-        package_config.upstream_project_url = self.project_url
-        return package_config
+        proj = self.get_project()
+        try:
+            package_config: PackageConfig = get_package_config_from_repo(
+                self.get_project(), self.base_ref
+            )
+            if not package_config:
+                return None
+            package_config.upstream_project_url = self.project_url
+            return package_config
+        except PackitConfigException as ex:
+            msg = f"packit failed while loading packit config. " \
+                  f"Please make sure the packit config is valid: \n {ex}"
+            proj.pr_comment(self.pr_id, msg)
 
 
 class PullRequestCommentEvent(AbstractGithubEvent):
